@@ -35,6 +35,8 @@ Usage: `unreal2gltf.py -i <input path> -o <output path> [additional flags] `
 
 `-nt`, `--notexture`: Export without textures
 
+`-f`, `--flat`: Export all files to a single folder without creating subfolders. By default, the script maintains the folder structure from Unreal Engine, but this flag will export all meshes directly to the output directory.
+
 ## Advanced Uage
 This script can be run directly from the commandline. Unreal Documentation shows how to run Python scripts directly from the commandline [here](https://docs.unrealengine.com/5.0/en-US/scripting-the-unreal-editor-using-python/#thecommandline).
 >[!WARNING]

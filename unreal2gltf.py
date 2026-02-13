@@ -12,11 +12,12 @@ Usage: unreal2gltf.py -i <input path> -o <output path > [flags]
     -b, --binary: Will export assets in the '.glb' instead of the '.gltf' format.
     -d, --subdirs=: List of subdirectories to export separated by commas. Ex. path1,path2,path3
     -nt, --notexture: Export without textures
+    -f, --flat: Export all files to a single folder without creating subfolders
 """
 VERSION_INFO= "unreal2gltf.py Version 1.2"
 
 # Actual Export Function
-def do_export(asset_directory: str, output_root: str, as_bin:bool, recurse:bool, no_texture:bool):
+def do_export(asset_directory: str, output_root: str, as_bin:bool, recurse:bool, no_texture:bool, flat_export:bool=False):
     # Check if input amd output were full directories
     if asset_directory[-1] == '/':
         asset_path = GAME_PATH_ROOT+asset_directory
@@ -54,14 +55,20 @@ def do_export(asset_directory: str, output_root: str, as_bin:bool, recurse:bool,
                 # Creating export path by concatenating the output root, mesh name and file type
                 # Also splicing the asset_path variable to account for /Game/
                 # Maintain folder structure for both .glb and .gltf formats
-                relative_path = asset[len(GAME_PATH_ROOT):]
-                asset_dir, asset_name = os.path.split(relative_path)
-                export_dir = os.path.join(output_root, asset_dir)
                 
-                if gltf_file_type == '.glb':
-                    export_path = os.path.join(export_dir, f"{static_mesh.get_name()}{gltf_file_type}")
+                if flat_export:
+                    # Export all files to a single folder
+                    export_path = os.path.join(output_root, f"{static_mesh.get_name()}{gltf_file_type}")
                 else:
-                    export_path = os.path.join(export_dir, static_mesh.get_name(), f"{static_mesh.get_name()}{gltf_file_type}")
+                    # Maintain original folder structure
+                    relative_path = asset[len(GAME_PATH_ROOT):]
+                    asset_dir, asset_name = os.path.split(relative_path)
+                    export_dir = os.path.join(output_root, asset_dir)
+                    
+                    if gltf_file_type == '.glb':
+                        export_path = os.path.join(export_dir, f"{static_mesh.get_name()}{gltf_file_type}")
+                    else:
+                        export_path = os.path.join(export_dir, static_mesh.get_name(), f"{static_mesh.get_name()}{gltf_file_type}")
                 
                 # Ensure the export directory exists
                 os.makedirs(os.path.dirname(export_path), exist_ok=True)
@@ -78,10 +85,11 @@ def main(argv):
     recursive_flag = False
     as_binary = False
     no_texture = False
+    flat_export = False
     
     # Define and check the commandline arguments
     try:
-        opts, arg = getopt.getopt(argv,"bd:hi:o:rvnt",["help","ipath=","opath=","recursive", "subdirs=", "binary", "version", "notexture"])
+        opts, arg = getopt.getopt(argv,"bd:fhi:o:rvnt",["help","ipath=","opath=","recursive", "subdirs=", "binary", "version", "notexture", "flat"])
     except getopt.GetoptError:
         unreal.log_error("unreal2gltf.py: Invalid Arguments. Try \'unreal2gltf.py -h\' for more information.")
         sys.exit(2)
@@ -107,6 +115,8 @@ def main(argv):
             using_subdirs = True
         elif opt in ("-nt", "--notexture"):
             no_texture = True
+        elif opt in ("-f", "--flat"):
+            flat_export = True
     
     # Handle empty input path
     if input_directory == '':
@@ -121,11 +131,11 @@ def main(argv):
     if using_subdirs:
         for subdir in subdirs:
             if input_directory[-1] == '/':
-                do_export(input_directory+subdir,output_directory,as_binary,recursive_flag,no_texture)
+                do_export(input_directory+subdir,output_directory,as_binary,recursive_flag,no_texture,flat_export)
             else:
-                do_export(input_directory+'/'+subdir,output_directory,as_binary,recursive_flag,no_texture)
+                do_export(input_directory+'/'+subdir,output_directory,as_binary,recursive_flag,no_texture,flat_export)
     else:
-        do_export(input_directory,output_directory,as_binary,recursive_flag,no_texture)
+        do_export(input_directory,output_directory,as_binary,recursive_flag,no_texture,flat_export)
 
 # Run script if called from the commandline
 if __name__ == "__main__":
