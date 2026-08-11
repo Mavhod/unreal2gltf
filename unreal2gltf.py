@@ -13,11 +13,12 @@ Usage: unreal2gltf.py -i <input path> -o <output path > [flags]
     -d, --subdirs=: List of subdirectories to export separated by commas. Ex. path1,path2,path3
     -nt, --notexture: Export without textures
     -f, --flat: Export all files to a single folder without creating subfolders
+    -l, --lod=: Level of detail (LOD) level to export (integer, e.g. 0, 1, 2)
 """
-VERSION_INFO= "unreal2gltf.py Version 1.2"
+VERSION_INFO= "unreal2gltf.py Version 1.3"
 
 # Actual Export Function
-def do_export(asset_directory: str, output_root: str, as_bin:bool, recurse:bool, no_texture:bool, flat_export:bool=False):
+def do_export(asset_directory: str, output_root: str, as_bin:bool, recurse:bool, no_texture:bool, flat_export:bool=False, lod_level=None):
     # Check if input amd output were full directories
     if asset_directory[-1] == '/':
         asset_path = GAME_PATH_ROOT+asset_directory
@@ -52,28 +53,49 @@ def do_export(asset_directory: str, output_root: str, as_bin:bool, recurse:bool,
 
             static_mesh = unreal.EditorAssetLibrary.load_asset(asset)
             if unreal.MathLibrary.class_is_child_of(static_mesh.get_class(), unreal.StaticMesh.static_class()):
-                # Creating export path by concatenating the output root, mesh name and file type
-                # Also splicing the asset_path variable to account for /Game/
-                # Maintain folder structure for both .glb and .gltf formats
-                
-                if flat_export:
-                    # Export all files to a single folder
-                    export_path = os.path.join(output_root, f"{static_mesh.get_name()}{gltf_file_type}")
+                # Determine which LODs to export
+                mesh_lods = []
+                if lod_level == 'all':
+                    try:
+                        num_lods = static_mesh.get_num_lods()
+                        mesh_lods = list(range(num_lods))
+                    except Exception as e:
+                        unreal.log_warning(f"Failed to get LOD count for {static_mesh.get_name()}: {e}. Defaulting to LOD 0.")
+                        mesh_lods = [0]
+                elif lod_level is not None:
+                    mesh_lods = [lod_level]
                 else:
-                    # Maintain original folder structure
-                    relative_path = asset[len(GAME_PATH_ROOT):]
-                    asset_dir, asset_name = os.path.split(relative_path)
-                    export_dir = os.path.join(output_root, asset_dir)
-                    
-                    if gltf_file_type == '.glb':
-                        export_path = os.path.join(export_dir, f"{static_mesh.get_name()}{gltf_file_type}")
+                    mesh_lods = [None]
+
+                for current_lod in mesh_lods:
+                    if current_lod is not None:
+                        export_options.default_level_of_detail = current_lod
+                        suffix = f"_LOD{current_lod}"
                     else:
-                        export_path = os.path.join(export_dir, static_mesh.get_name(), f"{static_mesh.get_name()}{gltf_file_type}")
-                
-                # Ensure the export directory exists
-                os.makedirs(os.path.dirname(export_path), exist_ok=True)
-                
-                unreal.GLTFExporter.export_to_gltf(static_mesh, export_path, export_options, selected_actors) # type: ignore
+                        suffix = ""
+
+                    # Creating export path by concatenating the output root, mesh name and file type
+                    # Also splicing the asset_path variable to account for /Game/
+                    # Maintain folder structure for both .glb and .gltf formats
+                    
+                    if flat_export:
+                        # Export all files to a single folder
+                        export_path = os.path.join(output_root, f"{static_mesh.get_name()}{suffix}{gltf_file_type}")
+                    else:
+                        # Maintain original folder structure
+                        relative_path = asset[len(GAME_PATH_ROOT):]
+                        asset_dir, asset_name = os.path.split(relative_path)
+                        export_dir = os.path.join(output_root, asset_dir)
+                        
+                        if gltf_file_type == '.glb':
+                            export_path = os.path.join(export_dir, f"{static_mesh.get_name()}{suffix}{gltf_file_type}")
+                        else:
+                            export_path = os.path.join(export_dir, static_mesh.get_name(), f"{static_mesh.get_name()}{suffix}{gltf_file_type}")
+                    
+                    # Ensure the export directory exists
+                    os.makedirs(os.path.dirname(export_path), exist_ok=True)
+                    
+                    unreal.GLTFExporter.export_to_gltf(static_mesh, export_path, export_options, selected_actors) # type: ignore
 
 # Main Script Entry
 def main(argv):
@@ -86,16 +108,18 @@ def main(argv):
     as_binary = False
     no_texture = False
     flat_export = False
+    lod_level = None
     
     # Define and check the commandline arguments
     try:
-        opts, arg = getopt.getopt(argv,"bd:fhi:o:rvnt",["help","ipath=","opath=","recursive", "subdirs=", "binary", "version", "notexture", "flat"])
+        opts, arg = getopt.getopt(argv,"bd:fhi:o:rvntl:",["help","ipath=","opath=","recursive", "subdirs=", "binary", "version", "notexture", "flat", "lod="])
     except getopt.GetoptError:
         unreal.log_error("unreal2gltf.py: Invalid Arguments. Try \'unreal2gltf.py -h\' for more information.")
         sys.exit(2)
     
     # Process arguments
     for opt, arg in opts:
+        arg = arg.lstrip('=')  # Handle cases where arg is passed as '=value'
         if opt in ("-h", "--help"):
             print(SCRIPT_USAGE)
             sys.exit()
@@ -117,6 +141,15 @@ def main(argv):
             no_texture = True
         elif opt in ("-f", "--flat"):
             flat_export = True
+        elif opt in ("-l", "--lod"):
+            if arg.lower() == 'all':
+                lod_level = 'all'
+            else:
+                try:
+                    lod_level = int(arg)
+                except ValueError:
+                    unreal.log_error("unreal2gltf.py: LOD level must be an integer or 'all'. Received: " + arg)
+                    sys.exit(2)
     
     # Handle empty input path
     if input_directory == '':
@@ -131,11 +164,11 @@ def main(argv):
     if using_subdirs:
         for subdir in subdirs:
             if input_directory[-1] == '/':
-                do_export(input_directory+subdir,output_directory,as_binary,recursive_flag,no_texture,flat_export)
+                do_export(input_directory+subdir,output_directory,as_binary,recursive_flag,no_texture,flat_export,lod_level)
             else:
-                do_export(input_directory+'/'+subdir,output_directory,as_binary,recursive_flag,no_texture,flat_export)
+                do_export(input_directory+'/'+subdir,output_directory,as_binary,recursive_flag,no_texture,flat_export,lod_level)
     else:
-        do_export(input_directory,output_directory,as_binary,recursive_flag,no_texture,flat_export)
+        do_export(input_directory,output_directory,as_binary,recursive_flag,no_texture,flat_export,lod_level)
 
 # Run script if called from the commandline
 if __name__ == "__main__":

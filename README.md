@@ -37,6 +37,8 @@ Usage: `unreal2gltf.py -i <input path> -o <output path> [additional flags] `
 
 `-f`, `--flat`: Export all files to a single folder without creating subfolders. By default, the script maintains the folder structure from Unreal Engine, but this flag will export all meshes directly to the output directory.
 
+`-l`, `--lod=`: Level of detail (LOD) level to export. Can be an integer (e.g. `0`, `1`, `2`) to export a specific LOD level, or `'all'` to export all available LOD levels for each static mesh. If set, exported files will be appended with `_LOD{i}` (e.g. `MeshName_LOD0.gltf`). If not specified, standard LOD 0 is exported without filename suffixing.
+
 ## Advanced Uage
 This script can be run directly from the commandline. Unreal Documentation shows how to run Python scripts directly from the commandline [here](https://docs.unrealengine.com/5.0/en-US/scripting-the-unreal-editor-using-python/#thecommandline).
 >[!WARNING]
